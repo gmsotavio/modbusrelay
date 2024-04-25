@@ -5,6 +5,13 @@ import (
 	"github.com/goburrow/modbus"
 )
 
+// RelayControllerInterface defines methods for controlling relays.
+type RelayControllerInterface interface {
+	SetRelayOn(relayNum uint16) error
+	SetRelayOff(relayNum uint16) error
+	Close() error
+}
+
 // RelayController represents a Modbus relay controller.
 type RelayController struct {
 	handler *modbus.RTUClientHandler
@@ -12,7 +19,7 @@ type RelayController struct {
 }
 
 // NewRelayController creates a new RelayController instance.
-func NewRelayController(device string, baudRate int, slaveID byte) (*RelayController, error) {
+func NewRelayController(device string, baudRate int, slaveID byte) (RelayControllerInterface, error) {
 	handler := modbus.NewRTUClientHandler(device)
 	handler.BaudRate = baudRate
 	handler.DataBits = 8
