@@ -2,7 +2,9 @@
 package modbusrelay
 
 import (
-	"github.com/goburrow/modbus"
+	"fmt"
+	"github.com/simonvetter/modbus"
+	"time"
 )
 
 // RelayControllerInterface defines methods for controlling relays.
@@ -14,45 +16,56 @@ type RelayControllerInterface interface {
 
 // RelayController represents a Modbus relay controller.
 type RelayController struct {
-	handler *modbus.RTUClientHandler
-	client  modbus.Client
+	client *modbus.ModbusClient
 }
 
 // NewRelayController creates a new RelayController instance.
-func NewRelayController(device string, baudRate int, slaveID byte) (RelayControllerInterface, error) {
-	handler := modbus.NewRTUClientHandler(device)
-	handler.BaudRate = baudRate
-	handler.DataBits = 8
-	handler.Parity = "N"
-	handler.StopBits = 1
-	handler.SlaveId = slaveID
+func NewRelayController(device string, baudRate uint, slaveID byte) (RelayControllerInterface, error) {
 
-	err := handler.Connect()
+	client, err := modbus.NewClient(&modbus.ClientConfiguration{
+		URL:      "rtu://" + device,
+		Speed:    baudRate,
+		DataBits: 8,
+		Parity:   modbus.PARITY_NONE,
+		StopBits: 2,
+		Timeout:  300 * time.Millisecond,
+	})
+
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to create Modbus client: %w", err)
 	}
 
-	client := modbus.NewClient(handler)
+	err = client.Open()
+	if err != nil {
+		return nil, fmt.Errorf("failed to open Modbus connection: %w", err)
+	}
+
+	err = client.SetUnitId(slaveID)
+	if err != nil {
+		// Close the client if setting unit ID fails
+		client.Close()
+		return nil, fmt.Errorf("failed to set unit ID: %w", err)
+	}
 
 	return &RelayController{
-		handler: handler,
-		client:  client,
+		client: client,
 	}, nil
+
 }
 
 // SetRelayOn turns on the specified relay.
 func (rc *RelayController) SetRelayOn(relayNum uint16) error {
-	_, err := rc.client.WriteSingleCoil(relayNum, 0xFF00)
+	err := rc.client.WriteCoil(relayNum, true)
 	return err
 }
 
 // SetRelayOff turns off the specified relay.
 func (rc *RelayController) SetRelayOff(relayNum uint16) error {
-	_, err := rc.client.WriteSingleCoil(relayNum, 0x0000)
+	err := rc.client.WriteCoil(relayNum, false)
 	return err
 }
 
 // Close closes the Modbus connection.
 func (rc *RelayController) Close() error {
-	return rc.handler.Close()
+	return rc.client.Close()
 }
